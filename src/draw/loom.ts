@@ -86,7 +86,7 @@ function warpX(i: number, n: number, box: Box, tightness: number): number {
   const pad = 18
   const t = n <= 1 ? 0.5 : i / (n - 1)
   const even = box.x + pad + t * (box.w - pad * 2)
-  const squeeze = 0.18 + tightness * 0.32
+  const squeeze = 0.04 + tightness * 0.36
   const mid = box.x + box.w / 2
   return even * (1 - squeeze) + mid * squeeze
 }
@@ -101,13 +101,13 @@ export function paintLoom(
   ctx.clearRect(0, 0, w, h)
   paintFloor(ctx, w, h, motion.lamp)
   const frame: Box = {
-    x: Math.round(w * 0.16),
-    y: Math.round(h * 0.07),
-    w: Math.round(w * 0.72),
-    h: Math.round(h * 0.86),
+    x: Math.round(w < 760 ? w * 0.06 : w * 0.2),
+    y: Math.round(h * 0.08),
+    w: Math.round(w < 760 ? w * 0.88 : w * 0.64),
+    h: Math.round(h * 0.84),
   }
 
-  paintHangingCards(ctx, frame, mill.picks, motion.card)
+  paintHangingCards(ctx, frame, mill.picks, motion.card, w)
   paintFrame(ctx, frame)
   paintJacquardHead(ctx, frame, mill, motion)
 
@@ -133,7 +133,7 @@ export function paintLoom(
   paintCloth(ctx, xs, fellY, beamY, mill.picks, tightness)
   paintShuttle(ctx, inner, shedY, mill, motion)
   paintClothBeam(ctx, inner, beamY, mill.picks.length)
-  paintLamp(ctx, w, h, motion.lamp)
+  paintLamp(ctx, w, h, motion.lamp, frame)
   paintStamp(ctx, frame)
 }
 
@@ -239,10 +239,10 @@ function paintJacquardHead(
     paintCard(ctx, x, head.y + 10, cardW, cardH, pick ?? null, i + mill.picks.length)
   }
 
-  ctx.fillStyle = mix(LAMP, PAPER, 0.35)
+  ctx.fillStyle = mix(LAMP, PAPER, 0.45)
   ctx.font = '10px "Share Tech Mono", monospace'
   ctx.textAlign = 'left'
-  ctx.fillText('JACQUARD  ·  PATTERN CHAIN', head.x + 14, head.y + 7)
+  ctx.fillText('JACQUARD  ·  PATTERN CHAIN', head.x + 14, head.y + head.h - 4)
 }
 
 function paintCard(
@@ -297,19 +297,21 @@ function paintHangingCards(
   f: Box,
   picks: WeftPick[],
   cardShift: number,
+  canvasW: number,
 ): void {
-  const used = picks.slice(-8)
-  let y = f.y + 40
+  if (canvasW < 760) return
+  const used = picks.slice(-7)
+  let y = f.y + Math.round(f.h * 0.22)
   used.forEach((p, i) => {
-    const x = f.x - 58 + Math.sin((cardShift + i) * 0.04) * 3
-    paintCard(ctx, x, y, 42, 54, p, p.id)
+    const x = f.x - 54 + Math.sin((cardShift + i) * 0.04) * 3
+    paintCard(ctx, x, y, 40, 50, p, p.id)
     ctx.strokeStyle = LINEN_DIM
     ctx.lineWidth = 1.2
     ctx.beginPath()
-    ctx.moveTo(x + 42, y + 8)
-    ctx.lineTo(f.x + 8, y + 4)
+    ctx.moveTo(x + 40, y + 8)
+    ctx.lineTo(f.x + 10, y + 6)
     ctx.stroke()
-    y += 58
+    y += 54
   })
 }
 
@@ -328,8 +330,8 @@ function paintWarps(
       ? (mill.picks[mill.picks.length - 1]!.holes[i] ? 1 : 0)
       : i % 2
     const shed = motion.reduced ? 0 : motion.shed * 11 * (lift ? 1 : -1)
-    ctx.strokeStyle = mix(LINEN, yarn.dye, 0.18 + tightness * 0.2)
-    ctx.lineWidth = 1.15 + (i % 3 === 0 ? 0.35 : 0)
+    ctx.strokeStyle = mix(LINEN, yarn.dye, 0.22 + tightness * 0.25)
+    ctx.lineWidth = 1.45 + (i % 3 === 0 ? 0.45 : 0)
     ctx.beginPath()
     ctx.moveTo(x, y0)
     ctx.bezierCurveTo(x + shed * 0.15, y0 + (y1 - y0) * 0.22, x + shed, (y0 + y1) / 2, x, y1)
@@ -366,17 +368,20 @@ function paintReed(
   y: number,
   tightness: number,
 ): void {
-  const h = 18
-  fillWood(ctx, inner.x, y - 6, inner.w, 6, 201, false)
-  fillWood(ctx, inner.x, y + h - 2, inner.w, 6, 203, false)
-  ctx.strokeStyle = mix(BRASS, PITCH, tightness * 0.4)
-  ctx.lineWidth = 0.9 + tightness * 0.6
-  xs.forEach((x) => {
+  const h = 22
+  fillWood(ctx, inner.x - 4, y - 7, inner.w + 8, 7, 201, false)
+  fillWood(ctx, inner.x - 4, y + h - 3, inner.w + 8, 7, 203, false)
+  ctx.strokeStyle = mix(BRASS, PITCH, 0.15 + tightness * 0.45)
+  ctx.lineWidth = 1.05 + tightness * 0.7
+  const dents = Math.max(xs.length * 2, 24)
+  for (let i = 0; i < dents; i++) {
+    const t = i / (dents - 1)
+    const x = inner.x + 8 + t * (inner.w - 16)
     ctx.beginPath()
     ctx.moveTo(x, y)
     ctx.lineTo(x, y + h)
     ctx.stroke()
-  })
+  }
 }
 
 function paintCloth(
@@ -389,7 +394,7 @@ function paintCloth(
 ): void {
   if (!picks.length) return
   const room = Math.max(24, beamY - fellY - 10)
-  const rowH = Math.min(7, room / Math.max(1, picks.length))
+  const rowH = Math.min(12.5, room / Math.max(18, picks.length))
   const n = xs.length
 
   picks.forEach((pick, pi) => {
@@ -430,26 +435,29 @@ function paintCloth(
       return
     }
 
-    ctx.lineWidth = 1.35 + tightness * 0.9
+    ctx.lineWidth = 2.35 + tightness * 1.15
     ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
     ctx.beginPath()
     xs.forEach((x, i) => {
       const over = pick.holes[i] ?? i % 2 === 0
-      const yy = y + (over ? -1.2 : 1.2)
+      const yy = y + (over ? -2.6 : 2.6)
       const colored = pick.kind !== 'plain' && i >= dyeStart && i <= dyeEnd
       if (i === 0) ctx.moveTo(x, yy)
       else ctx.lineTo(x, yy)
       if (colored && i === dyeStart) {
-        ctx.strokeStyle = mix(base, PITCH, tightness * 0.15)
+        ctx.strokeStyle = mix(base, PITCH, tightness * 0.18)
         ctx.stroke()
         ctx.beginPath()
         ctx.moveTo(x, yy)
         ctx.strokeStyle = pick.dye
+        ctx.lineWidth = 3.1 + tightness
       }
       if (colored && i === dyeEnd) {
         ctx.stroke()
         ctx.beginPath()
         ctx.moveTo(x, yy)
+        ctx.lineWidth = 2.35 + tightness * 1.15
       }
     })
     ctx.strokeStyle = mix(base, PITCH, tightness * 0.22)
@@ -491,32 +499,37 @@ function paintShuttle(
 ): void {
   const last = mill.picks[mill.picks.length - 1]
   const t = motion.reduced ? 0.5 : motion.shuttle
-  const x = inner.x + 36 + t * (inner.w - 72)
+  const x = inner.x + 48 + t * (inner.w - 96)
   ctx.save()
   ctx.translate(x, y)
-  if (!motion.reduced && t > 0.02 && t < 0.98) ctx.rotate(t > 0.5 ? 0.04 : -0.04)
+  if (!motion.reduced && t > 0.02 && t < 0.98) ctx.rotate(t > 0.5 ? 0.05 : -0.05)
+  ctx.scale(1.35, 1.35)
 
   ctx.fillStyle = OAK
   ctx.beginPath()
-  ctx.moveTo(-22, 0)
-  ctx.quadraticCurveTo(-18, -7, -6, -8)
-  ctx.lineTo(10, -7)
-  ctx.quadraticCurveTo(18, -2, 24, 0)
-  ctx.quadraticCurveTo(18, 2, 10, 7)
-  ctx.lineTo(-6, 8)
-  ctx.quadraticCurveTo(-18, 7, -22, 0)
+  ctx.moveTo(-28, 0)
+  ctx.quadraticCurveTo(-22, -9, -8, -11)
+  ctx.lineTo(12, -9)
+  ctx.quadraticCurveTo(22, -3, 30, 0)
+  ctx.quadraticCurveTo(22, 3, 12, 9)
+  ctx.lineTo(-8, 11)
+  ctx.quadraticCurveTo(-22, 9, -28, 0)
   ctx.closePath()
   ctx.fill()
   ctx.strokeStyle = OAK_DARK
-  ctx.lineWidth = 1.2
+  ctx.lineWidth = 1.4
   ctx.stroke()
 
   ctx.fillStyle = last?.dye ?? LINEN
   ctx.beginPath()
-  ctx.ellipse(-2, 0, 7, 5, 0, 0, Math.PI * 2)
+  ctx.ellipse(-2, 0, 9, 6.5, 0, 0, Math.PI * 2)
   ctx.fill()
   ctx.strokeStyle = mix(PITCH, last?.dye ?? LINEN, 0.3)
   ctx.stroke()
+  ctx.fillStyle = mix(last?.dye ?? LINEN, PITCH, 0.25)
+  ctx.beginPath()
+  ctx.ellipse(-2, 0, 3.2, 6.5, 0, 0, Math.PI * 2)
+  ctx.fill()
   ctx.restore()
 
   if (last?.kind === 'dyed' && last.callsign) {
@@ -533,18 +546,28 @@ function paintClothBeam(
   y: number,
   pickCount: number,
 ): void {
-  fillWood(ctx, inner.x - 6, y - 10, inner.w + 12, 20, 310, false)
+  fillWood(ctx, inner.x - 6, y - 12, inner.w + 12, 24, 310, false)
+  ctx.fillStyle = mix(LINEN, OAK, 0.4)
+  ctx.fillRect(inner.x + 8, y - 7, inner.w - 16, 10)
+  ctx.strokeStyle = mix(LINEN_DIM, PITCH, 0.3)
+  ctx.lineWidth = 0.6
+  for (let i = 0; i < 9; i++) {
+    ctx.beginPath()
+    ctx.moveTo(inner.x + 8, y - 6 + i)
+    ctx.lineTo(inner.x + inner.w - 8, y - 6 + i)
+    ctx.stroke()
+  }
   ctx.fillStyle = mix(LINEN, OAK, 0.45)
   ctx.beginPath()
-  ctx.ellipse(inner.x - 4, y, 7, 11, 0, 0, Math.PI * 2)
+  ctx.ellipse(inner.x - 4, y, 8, 13, 0, 0, Math.PI * 2)
   ctx.fill()
   ctx.beginPath()
-  ctx.ellipse(inner.x + inner.w + 4, y, 7, 11, 0, 0, Math.PI * 2)
+  ctx.ellipse(inner.x + inner.w + 4, y, 8, 13, 0, 0, Math.PI * 2)
   ctx.fill()
   ctx.fillStyle = BRASS
   ctx.font = '10px "Share Tech Mono", monospace'
   ctx.textAlign = 'center'
-  ctx.fillText(`CLOTH BEAM  ·  ${pickCount} PICKS`, inner.x + inner.w / 2, y + 4)
+  ctx.fillText(`CLOTH BEAM  ·  ${pickCount} PICKS`, inner.x + inner.w / 2, y + 5)
 }
 
 function paintLamp(
@@ -552,25 +575,38 @@ function paintLamp(
   w: number,
   h: number,
   lamp: number,
+  f: Box,
 ): void {
-  const g = ctx.createRadialGradient(w * 0.78, h * 0.08, 8, w * 0.78, h * 0.08, w * 0.55)
-  g.addColorStop(0, `rgba(228, 160, 74, ${0.07 + lamp * 0.05})`)
+  const g = ctx.createRadialGradient(f.x + f.w - 20, f.y + 36, 8, f.x + f.w - 20, f.y + 36, w * 0.5)
+  g.addColorStop(0, `rgba(228, 160, 74, ${0.08 + lamp * 0.05})`)
   g.addColorStop(1, 'rgba(0,0,0,0)')
   ctx.fillStyle = g
   ctx.fillRect(0, 0, w, h)
 
-  // oil lamp body, upper right, not a UI widget
   ctx.save()
-  ctx.translate(w * 0.9, h * 0.08)
-  ctx.fillStyle = mix(BRASS, LAMP, 0.3)
+  ctx.translate(f.x + f.w - 18, f.y + 28)
+  ctx.strokeStyle = BRASS
+  ctx.lineWidth = 1.2
   ctx.beginPath()
-  ctx.ellipse(0, 18, 10, 14, 0, 0, Math.PI * 2)
+  ctx.moveTo(0, -18)
+  ctx.lineTo(0, 0)
+  ctx.stroke()
+  ctx.fillStyle = mix(BRASS, LAMP, 0.25)
+  ctx.beginPath()
+  ctx.moveTo(-11, 6)
+  ctx.lineTo(-7, 22)
+  ctx.quadraticCurveTo(0, 28, 7, 22)
+  ctx.lineTo(11, 6)
+  ctx.closePath()
+  ctx.fill()
+  ctx.beginPath()
+  ctx.ellipse(0, 6, 12, 4, 0, 0, Math.PI * 2)
   ctx.fill()
   ctx.fillStyle = LAMP
-  ctx.globalAlpha = 0.55 + lamp * 0.35
+  ctx.globalAlpha = 0.6 + lamp * 0.35
   ctx.beginPath()
-  ctx.moveTo(-4, 2)
-  ctx.quadraticCurveTo(0, -16 - lamp * 6, 4, 2)
+  ctx.moveTo(-5, 4)
+  ctx.quadraticCurveTo(0, -18 - lamp * 8, 5, 4)
   ctx.closePath()
   ctx.fill()
   ctx.globalAlpha = 1
